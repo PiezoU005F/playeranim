@@ -1,4 +1,4 @@
-local ANIMATION_SPEED = tonumber(minetest.settings:get("playeranim.animation_speed")) or 2.4
+local ANIMATION_SPEED = tonumber(minetest.settings:get("playeranim.animation_speed")) or 3.1
 local ANIMATION_SPEED_SNEAK = tonumber(minetest.settings:get("playeranim.animation_speed_sneak")) or 0.8
 local BODY_ROTATION_DELAY = math.max(math.floor(tonumber(minetest.settings:get("playeranim.body_rotation_delay")) or 7), 1)
 local BODY_X_ROTATION_SNEAK = tonumber(minetest.settings:get("playeranim.body_x_rotation_sneak")) or 6.0
@@ -228,18 +228,18 @@ end
 local table_remove, math_deg = table.remove, math.deg
 local function rotate_body_and_head(player)
 	local body_x_rotation = (function()
-		local sneak = player:get_player_control().sneak
-		return sneak and BODY_X_ROTATION_SNEAK or 0
+		return (player:get_player_control().sneak) and BODY_X_ROTATION_SNEAK or 0
 	end)()
 
 	local body_y_rotation = (function()
 		local yaw_history = players_animation_data:get_yaw_history(player)
-		if #yaw_history > BODY_ROTATION_DELAY then
+		if yaw_history then
 			local body_yaw = table_remove(yaw_history, 1)
 			local player_yaw = player:get_look_horizontal()
 			return math_deg(player_yaw - body_yaw)
+		else
+			return 0
 		end
-		return 0
 	end)()
 
 	rotate_bone(player, BODY, {x = body_x_rotation, y = body_y_rotation, z = 0})
@@ -258,11 +258,26 @@ local function animate_player(player, dtime)
 	else
 		players_animation_data:add_yaw_to_history(player)
 	end
-
+	
+	local minSpeed = 0.5
+	local rClick = false
+	local control = player:get_player_control()
+	if control.sneak then
+		minSpeed = 0.25
+	end
+	if control.RMB then
+		rClick = true 
+	end
+	
+	
+	if math.abs(player:get_player_velocity().x) < minSpeed and math.abs(player:get_player_velocity().z) < minSpeed then
+		if animation == "walk" then animation = "stand" 
+		elseif animation == "walk_mine" then animation = "mine" end
+	end
 	-- Increment animation time
 	if animation == "walk"
 	or animation == "mine"
-	or animation == "walk_mine" then
+	or animation == "walk_mine" or rClick then
 		players_animation_data:increment_time(player, dtime)
 	else
 		players_animation_data:reset_time(player)
@@ -270,13 +285,21 @@ local function animate_player(player, dtime)
 
 	-- Set animation
 	if animation == "stand" then
-		set_animation(player, STAND)
+		if rClick then
+			set_animation(player, MINE, true)
+		else
+			set_animation(player, STAND)
+		end
 	elseif animation == "lay" then
 		set_animation(player, LAY)
 	elseif animation == "sit" then
 		set_animation(player, SIT)
 	elseif animation == "walk" then
-		set_animation(player, WALK, true)
+		if rClick then
+			set_animation(player, WALK_MINE, true)
+		else
+			set_animation(player, WALK, true)
+		end
 	elseif animation == "mine" then
 		set_animation(player, MINE, true)
 	elseif animation == "walk_mine" then
